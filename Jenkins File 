@@ -1,0 +1,66 @@
+pipeline {
+    agent any
+
+    environment {
+        PROJECT_REPO="git@bitbucket.org:keshavunthinkable/node-hello.git"  
+        APP_PORT=3000
+    }
+
+    stages {
+        stage('Clone Repository') {
+            steps {
+                sh """
+                echo "Cloning repository..."
+                git clone $PROJECT_REPO 
+                cd node-hello
+                """
+            }
+        }
+
+        stage('Check Node.js Installation') {
+            steps {
+                sh """
+                node -v
+                """
+            }
+        }
+
+        stage('Install Dependencies') {
+            steps {
+                sh """
+                cd node-hello
+                echo "Installing dependencies..."
+                npm install
+                pwd
+                """
+            }
+        }
+
+        stage('Start Application') {
+            steps {
+                sh """
+                cd node-hello
+                echo "Starting application..."
+                npm start &
+                sleep 10  # Give the app time to start
+                """
+            }
+        }
+
+        stage('Verify Application') {
+            steps {
+                sh """
+                echo "Checking if application is running..."
+                HTTP_STATUS=\$(curl -s -o /dev/null -w "%{http_code}" http://localhost:$APP_PORT)
+                
+                if [ "\$HTTP_STATUS" -ne 200 ]; then
+                    echo "Error: Application is not running properly!"
+                    exit 1
+                else
+                    echo "Application is running successfully!"
+                fi
+                """
+            }
+        }
+    }
+}
