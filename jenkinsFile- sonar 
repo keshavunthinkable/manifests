@@ -1,0 +1,77 @@
+pipeline {
+    agent any
+
+    environment {
+        PROJECT_NAME = "node-hello"
+        PROJECT_REPO = "git@bitbucket.org:keshavunthinkable/node-hello.git"
+        APP_DIR = "node-hello"
+        APP_PORT = 3000
+    }
+
+    stages {
+        // stage('Cleanup Old Process') {
+        //     steps {
+        //         sh """
+        //         echo "Checking for existing PM2 process..."
+        //         if pm2 list | grep -q $PROJECT_NAME; then
+        //             echo "Stopping existing PM2 process..."
+        //             pm2 delete $PROJECT_NAME
+        //         else
+        //             echo "No existing PM2 process found."
+        //         fi
+        //         """
+        //     }
+        // }
+
+        stage('Clone Repository') {
+            steps {
+                sh """
+                echo "Cloning repository..."
+                rm -rf $APP_DIR
+                git clone $PROJECT_REPO
+                """
+            }
+        }
+        
+        stage('Sonar') {
+            steps {
+                sh 'sonar-scanner \
+                        -Dsonar.projectKey=test12345 \
+                        -Dsonar.sources=. \
+                        -Dsonar.host.url=http://localhost:9000 \
+                        -Dsonar.token=sqp_e694b72aefc309fa49d54a95991594751064bd91'
+            }
+        }
+        
+
+        stage('Install Dependencies') {
+            steps {
+                sh """
+                cd /var/lib/jenkins/workspace/node-project/node-hello && npm install
+                """
+            }
+        }
+
+        
+        stage('stop old version') {
+            steps {
+                sh """
+                cd /var/lib/jenkins/workspace/node-project/node-hello && pm2 stop 0
+                cd /var/lib/jenkins/workspace/node-project/node-hello && pm2 delete 0
+                """
+            }
+        }
+
+        stage('Start Application with PM2') {
+            steps {
+                sh """
+                cd /var/lib/jenkins/workspace/node-project/node-hello && pm2 start npm  -- start --name "$PROJECT_NAME"
+                cd /var/lib/jenkins/workspace/node-project/node-hello && pm2 save
+                """
+            }
+        }
+
+    }
+
+    
+}
