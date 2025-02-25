@@ -1,83 +1,49 @@
 pipeline {
-    agent any
+  
+    agent any 
+    
+    
+    // environment {
+    //     REPO_NAME = 'java-project' //ECR repo name 
+    //     // APP_DIR="hello-world-java"
 
-    environment {
-        PROJECT_REPO="git@bitbucket.org:keshavunthinkable/node-hello.git"  
-        APP_PORT=3000
-        APP_DIR="node-hello"
-    }
-
-    stages {
-        stage('Cleanup Old Process') {
+    // }
+    
+    stages{
+        
+        stage('cloing into a repo '){
+            steps { 
+                git credentialsId: 'github-access-token', url: 'https://github.com/keshavunthinkable/java-project.git'
+            }
+        }
+        
+        stage('check java installations') {
             steps {
                 sh """
-                echo "Checking for existing PM2 process..."
-                if pm2 list | grep -q "$APP_DIR"; then
-                    echo "Stopping existing PM2 process..."
-                    pm2 delete $APP_DIR
-                else
-                    echo "No existing PM2 process found."
-                fi
+                echo " cloning the java version"
+                java --version
+                """
+            }
+        }
+        
+        stage('Build Docker Image') {
+            steps {
+                sh """
+                echo "Building the Docker image..."
+                docker build -t hello-world-java .
                 """
             }
         }
 
-        stage('Clone Repository') {
+        stage('Run Docker Container') {
             steps {
                 sh """
-                echo "Cloning repository..."
-                rm -rf $APP_DIR  # Remove old repo if exists
-                git clone $PROJECT_REPO
+                echo "Running the Docker container..."
+                docker run --rm hello-world-java
                 """
             }
-        }
-
-        stage('Check Node.js Installation') {
-            steps {
-                sh """
-                echo "Checking Node.js version..."
-                node -v
-                """
-            }
-        }
-
-        stage('Install Dependencies') {
-            steps {
-                sh """
-                cd $APP_DIR
-                echo "Installing dependencies..."
-                npm install
-                """
-            }
-        }
-
-        stage('Start Application with PM2') {
-            steps {
-                sh """
-                cd $APP_DIR
-                echo "Starting application using PM2..."
-                pm2 start npm --name "$APP_DIR" -- start
-                pm2 save
-                pm2 list  # Verify the process is running
-                """
-            }
-        }
-
-        stage('Verify Application') {
-            steps {
-                sh """
-                echo "Checking if application is running..."
-                HTTP_STATUS=\$(curl -s -o /dev/null -w "%{http_code}" http://localhost:$APP_PORT)
-                
-                if [ "\$HTTP_STATUS" -ne 200 ]; then
-                    echo "Error: Application is not running properly!"
-                    exit 1
-                else
-                    echo "Application is running successfully!"
-                fi
-                """
-            }
+    
+            
         }
     }
 }
-
