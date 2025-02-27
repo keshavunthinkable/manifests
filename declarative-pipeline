@@ -3,12 +3,16 @@ pipeline {
     agent any 
     
     
-    // environment {
-    //     REPO_NAME = 'java-project' //ECR repo name 
-    //     // APP_DIR="hello-world-java"
+    environment { 
+        //DOCKER_HUB_PASSWORD = credentials('dockerhub-password')
+        DOCKER_HUB_USERNAME = 'keshw2025'
+        DOCKER_TAG = 'latest' // Set your desired tag (e.g., 'latest', 'v1.0', etc.)
+        DOCKER_IMAGE = 'keshw2025/javaproject'
+        DOCKER_IMAGE_URL = "${DOCKER_IMAGE}:${DOCKER_TAG}" // Create a full image URL
 
-    // }
     
+    }
+
     stages{
         stage("Job Triggered Notification "){
             steps{
@@ -16,7 +20,7 @@ pipeline {
                     echo 'Job triggered successfullly.'
                     sendEmail(
                         "Jenkins Pipeline Tirggered : ${env.JOB_NAME} {Build #${env.BUILD_NUMBER}}",
-                        """
+                        """keshw2025/javaproject
                             The Jenkins pipeline has been triggered.<br><br>
                             <b>Project:</b> ${env.JOB_NAME}<br>
                             <b>Build Number:</b> ${env.BUILD_NUMBER}<br>
@@ -28,24 +32,17 @@ pipeline {
             }
         } 
         
-       /*stage('Copy .env.json file'){
-            steps{
-                withCredentials([file(credentialsId: 'ADMIN_PORTAL_ENV', variable: 'ADMIN_PORTAL_ENV')]) {
-                    sh 'cat $ADMIN_PORTAL_ENV > .env.json'
-                    sh 'cat .env.json'
-            }
-                
-            }
-        }*/
         
-        stage('creating a full url for Docker Image '){
+        stage('Creating a Full URL for Docker Image') {
             steps {
                 script { 
-                    env.DOCKER_IMAGE = "${env.ECR_URL}/${env.REPO_NAME}:${env.DOCKER_BRANCH}-${env.BUILD_NUMBER}"
-                    echo "Docker Image URL: ${env.DOCKER_IMAGE}"
+                    // Construct and echo the full Docker image URL
+                    echo "Docker Image URL: ${env.DOCKER_IMAGE_URL}"
                 }
             }
         }
+        
+        
         stage('cloing into a repo '){
             steps { 
                 git credentialsId: 'github-access-token', url: 'https://github.com/keshavunthinkable/java-project.git'
@@ -102,8 +99,32 @@ pipeline {
                 docker run --rm hello-world-java
                 """
             }
-    
-            
+        }
+        
+        
+        
+        
+        stage('Tag and Push Docker Image') {
+            steps {
+                script {
+                    // Authenticate Docker to Docker Hub using credentials
+                    withCredentials([string(credentialsId: 'dockerhub-password', variable: 'DOCKER_HUB_PASSWORD')]) {
+                        sh '''
+                            echo ${DOCKER_HUB_PASSWORD} | docker login -u ${DOCKER_HUB_USERNAME} --password-stdin
+                        '''
+                        
+                        // Tag the Docker image
+                        sh '''
+                            docker tag hello-world-java:latest ${DOCKER_IMAGE_URL}
+                        '''
+                        
+                        // Push the Docker image to Docker Hub
+                        sh '''
+                            docker push ${DOCKER_IMAGE_URL}
+                        '''
+                    }
+                }
+            }
         }
     }
     post {
