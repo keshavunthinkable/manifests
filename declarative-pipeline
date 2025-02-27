@@ -10,10 +10,54 @@ pipeline {
     // }
     
     stages{
+        stage("Job Triggered Notification "){
+            steps{
+                script{
+                    echo 'Job triggered successfullly.'
+                    sendEmail(
+                        "Jenkins Pipeline Tirggered : ${env.JOB_NAME} {Build #${env.BUILD_NUMBER}}",
+                        """
+                            The Jenkins pipeline has been triggered.<br><br>
+                            <b>Project:</b> ${env.JOB_NAME}<br>
+                            <b>Build Number:</b> ${env.BUILD_NUMBER}<br>
+                            <b>Build URL:</b> <a href="${env.BUILD_URL}">${env.BUILD_URL}</a>
+                        """
+                        )
+                        
+                }
+            }
+        } 
         
+       /*stage('Copy .env.json file'){
+            steps{
+                withCredentials([file(credentialsId: 'ADMIN_PORTAL_ENV', variable: 'ADMIN_PORTAL_ENV')]) {
+                    sh 'cat $ADMIN_PORTAL_ENV > .env.json'
+                    sh 'cat .env.json'
+            }
+                
+            }
+        }*/
+        
+        stage('creating a full url for Docker Image '){
+            steps {
+                script { 
+                    env.DOCKER_IMAGE = "${env.ECR_URL}/${env.REPO_NAME}:${env.DOCKER_BRANCH}-${env.BUILD_NUMBER}"
+                    echo "Docker Image URL: ${env.DOCKER_IMAGE}"
+                }
+            }
+        }
         stage('cloing into a repo '){
             steps { 
                 git credentialsId: 'github-access-token', url: 'https://github.com/keshavunthinkable/java-project.git'
+            }
+        }
+        stage('Sonar') {
+            steps {
+                sh 'sonar-scanner \
+                      -Dsonar.projectKey=java-helloworld \
+                      -Dsonar.sources=. \
+                      -Dsonar.host.url=http://localhost:9000 \
+                      -Dsonar.token=sqp_6ead414e2a197db85b50fdd1f89b445eaa13440c'
             }
         }
         
@@ -34,6 +78,22 @@ pipeline {
                 """
             }
         }
+        
+        stage('Gitleaks Scan') {
+            steps {
+                script {
+                    // Scan the repository for exposed secrets or hardcoded values.
+                    sh '''
+                        gitleaks detect \
+                            --source . \
+                            --verbose \
+                            --report-format csv \
+                            --exit-code 0 \
+                            --report-path gitleaks-report.csv
+                    '''
+                }
+            }
+        }
 
         stage('Run Docker Container') {
             steps {
@@ -46,4 +106,24 @@ pipeline {
             
         }
     }
+    post {
+        success {
+            sendEmail("Success", "Good news! The build was successful.")
+        }
+        failure {
+            sendEmail("Failed", "Unfortunately, the build has failed.")
+        }
+        always {
+            sendEmail("Completed", "The build has completed.")
+        }
+    }
+}
+def sendEmail(status, message) {
+    emailext(
+        subject: "Jenkins Job '${env.JOB_NAME}' - Build #${env.BUILD_NUMBER} - ${status}",
+        body: "${message}\n\nCheck console output at ${env.BUILD_URL}",
+        recipientProviders: [[$class: 'CulpritsRecipientProvider'], [$class: 'RequesterRecipientProvider']],
+        to: "keshav.mittal@unthinkable.co" // Using the defined environment variable for the email address
+    )
+
 }
